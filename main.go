@@ -1,97 +1,78 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 
-	"github.com/gorilla/mux"
+	"github.com/labstack/echo/v4"
 )
 
-type Article struct {
-	ID      string `json:"ID"`
-	Title   string `json:"Title"`
-	Desc    string `json:"Desc"`
-	Content string `json:"Content"`
-}
-
-var articles []Article
-
-func getArticles(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(articles)
-}
-
-func getArticle(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	params := mux.Vars(r)
-	for _, item := range articles {
-
-		if item.ID == params["id"] {
-			json.NewEncoder(w).Encode(item)
-			return
-		}
+type (
+	article struct {
+		ID      int    `json:"ID"`
+		Title   string `json:"Title"`
+		Desc    string `json:"Desc"`
+		Content string `json:"Content"`
 	}
-	json.NewEncoder(w).Encode(&Article{})
+)
+
+var (
+	articles = map[int]*article{}
+	seq      = 1
+)
+
+func getArticles(c echo.Context) error {
+	return c.JSON(http.StatusOK, articles)
 }
 
-func createArticle(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	var article Article
-	_ = json.NewDecoder(r.Body).Decode(&article)
-	article.ID = strconv.Itoa(len(articles) + 1)
-	articles = append(articles, article)
-	json.NewEncoder(w).Encode(article)
+func getArticle(c echo.Context) error {
+	id, _ := strconv.Atoi(c.Param("id"))
+	return c.JSON(http.StatusOK, articles[id])
 }
 
-func updateArticle(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	params := mux.Vars(r)
-	for index, item := range articles {
-
-		if item.ID == params["id"] {
-			articles = append(articles[:index], articles[index+1:]...)
-			var article Article
-			_ = json.NewDecoder(r.Body).Decode(&article)
-			article.ID = params["id"]
-			articles = append(articles, article)
-			json.NewEncoder(w).Encode(article)
-			return
-		}
+func createArticle(c echo.Context) error {
+	a := &article{
+		ID: seq,
 	}
-	json.NewEncoder(w).Encode(articles)
-}
-
-func deleteArticle(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	params := mux.Vars(r)
-	for index, item := range articles {
-
-		if item.ID == params["id"] {
-			articles = append(articles[:index], articles[index+1:]...)
-			break
-		}
+	if err := c.Bind(a); err != nil {
+		return err
 	}
-	json.NewEncoder(w).Encode(articles)
+	articles[a.ID] = a
+	seq++
+	return c.JSON(http.StatusCreated, a)
 }
 
-func homePage(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Homepage Endpoint Hit")
+func updateArticle(c echo.Context) error {
+	a := new(article)
+	if err := c.Bind(a); err != nil {
+		return err
+	}
+	id, _ := strconv.Atoi(c.Param("id"))
+	articles[id].Title = a.Title
+	articles[id].Desc = a.Desc
+	articles[id].Content = a.Content
+	return c.JSON(http.StatusOK, articles[id])
+}
+
+func deleteArticle(c echo.Context) error {
+	id, _ := strconv.Atoi(c.Param("id"))
+	delete(articles, id)
+	return c.NoContent(http.StatusNoContent)
+}
+
+func homePage(c echo.Context) error {
+	return c.String(http.StatusOK, "Homepage Endpoint Hit")
 }
 
 func handleRequest() {
-	articles = append(articles, Article{ID: "1", Title: "Article 1", Desc: "Desc", Content: "Hello world!"})
-	articles = append(articles, Article{ID: "2", Title: "Article 2", Desc: "Desc", Content: "Hello world!"})
-	router := mux.NewRouter().StrictSlash(true)
-	router.HandleFunc("/", homePage)
-	router.HandleFunc("/api/articles", getArticles).Methods("GET")
-	router.HandleFunc("/api/articles/{id}", getArticle).Methods("GET")
-	router.HandleFunc("/api/articles", createArticle).Methods("POST")
-	router.HandleFunc("/api/articles/{id}", updateArticle).Methods("PUT")
-	router.HandleFunc("/api/articles/{id}", deleteArticle).Methods("DELETE")
-	log.Fatal(http.ListenAndServe(":8081", router))
+	e := echo.New()
+	e.GET("/", homePage)
+	e.GET("/api/articles", getArticles)
+	e.GET("/api/articles/:id", getArticle)
+	e.POST("/api/articles", createArticle)
+	e.PUT("/api/articles/:id", updateArticle)
+	e.DELETE("/api/articles/:id", deleteArticle)
+	e.Logger.Fatal(e.Start(":8081"))
 }
 
 func main() {
