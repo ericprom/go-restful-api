@@ -82,10 +82,8 @@ func homePage(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleRequest() {
-
 	articles = append(articles, Article{ID: "1", Title: "Article 1", Desc: "Desc", Content: "Hello world!"})
 	articles = append(articles, Article{ID: "2", Title: "Article 2", Desc: "Desc", Content: "Hello world!"})
-
 	router := mux.NewRouter().StrictSlash(true)
 	router.HandleFunc("/", homePage)
 	router.HandleFunc("/api/articles", getArticles).Methods("GET")
